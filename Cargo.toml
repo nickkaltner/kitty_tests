@@ -1,0 +1,12 @@
+[package]
+name = "kitty_tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+base64 = "0.22.1"
+enterpolation = "0.2.1"
+log = "0.4.22"
+nix = "0.29.0"
+palette = "0.7.6"
+termios = "0.3.3"
