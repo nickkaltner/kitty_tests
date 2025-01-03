@@ -1,3 +1,5 @@
+use std::io::{self, stdin, BufRead, IsTerminal};
+
 pub mod colours;
 pub mod drawing;
 pub mod encoding;
@@ -5,26 +7,50 @@ pub mod misc;
 pub mod terminal_details;
 
 fn main() {
-    let mut random_list_length: u32 = rand::random();
-    random_list_length %= 40 + 20;
-
-    let mut random_list_min: u32 = rand::random();
-    random_list_min %= 8; // 0-7
-
-    let mut list: Vec<u32> = Vec::new();
-
-    for _i in 0..random_list_length {
-        let mut rand: u32 = rand::random();
-        rand %= 20;
-        rand += random_list_min;
-
-        list.push(rand);
-    }
-
     let config = drawing::SparklineConfig {
         suppress_text: true,
         generate_random_data: true,
     };
+
+    let mut list: Vec<u32> = Vec::new();
+
+    if stdin().is_terminal() {
+        let mut random_list_length: u32 = rand::random();
+        random_list_length %= 40 + 20;
+
+        let mut random_list_min: u32 = rand::random();
+        random_list_min %= 8; // 0-7
+
+        for _i in 0..random_list_length {
+            let mut rand: u32 = rand::random();
+            rand %= 20;
+            rand += random_list_min;
+
+            list.push(rand);
+        }
+    } else {
+        eprintln!("detected pipe, will read from stdin");
+
+        let stdin = io::stdin();
+        let handle = stdin.lock();
+
+        handle.lines().for_each(|line| match line {
+            Ok(line) => {
+                let number = line.parse();
+                match number {
+                    Ok(number) => {
+                        list.push(number);
+                    }
+                    Err(e) => {
+                        eprintln!("error: {:?} with line {:?}", e, line);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("error: {:?}", e);
+            }
+        });
+    }
 
     // test of flat sparkline
     // sparkline(vec![
