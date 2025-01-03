@@ -27,28 +27,29 @@ fn main() {
 
     // println!("terminal dimensions: {:?}", get_window_size());
 
-    let mut rand: u32 = rand::random();
-    rand %= 40 + 20;
+    let mut random_list_length: u32 = rand::random();
+    random_list_length %= 40 + 20;
+
+    let mut random_list_min: u32 = rand::random();
+    random_list_min %= 8; // 0-7
 
     let mut list: Vec<u32> = Vec::new();
 
-    for i in 0..rand {
+    for i in 0..random_list_length {
         let mut rand: u32 = rand::random();
         rand %= 20;
+        rand += random_list_min;
 
         list.push(rand);
     }
 
+    // test of flat sparkline
     sparkline(vec![
         10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
         10, 10, 10, 10, 10, 10, 10,
     ]);
 
     sparkline(list);
-
-    // sparkline(vec![
-    //     0, 2, 3, 4, 5, 6, 27, 28, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-    // ]);
 }
 
 fn _text_with_underline(string: &str) -> String {
@@ -250,16 +251,21 @@ fn sparkline(values: Vec<u32>) -> String {
 
     let image_size = 20 * value_count;
     let mut data: Vec<u32> = Vec::with_capacity(image_size);
-    data.resize(image_size, 0xAAFF6666);
-    for i in 0..20 {
-        let colour: Srgba<u8> = taken_colors[i as usize].into_encoding();
+    data.resize(image_size, 0xFF0000FF); // alpha, blue, green, red
+
+    for row in 0..20 {
+        let colour: Srgba<u8> = taken_colors[row as usize].into_encoding();
         // data[i * value_count] = 0xFF000000;
-        for j in 0..value_count {
+        for value_position in 0..value_count {
             let rar = u32::from_le_bytes(colour.into());
-            let position = i * 20 + j as usize;
-            //println!("position {}, data {}", position, data.len());
+            let position = (row * value_count) + value_position as usize;
+            // println!("position {}, data {}", position, data.len());
             if position >= data.len() {
-                //println!("position {} is out of bounds", position);
+                println!(
+                    "position {} is out of bounds (data.len is {})",
+                    position,
+                    data.len()
+                );
             } else {
                 data[position] = rar;
             }
@@ -274,14 +280,14 @@ fn sparkline(values: Vec<u32>) -> String {
         let value = values[i];
         let mut percentage = ((value as f32 - min_value as f32) / range) * 100.0;
         // to account for the case where the value is the same as the max
-        if percentage.is_infinite() {
+        if percentage.is_infinite() || percentage.is_nan() {
             percentage = 100.0;
         }
         let bar_count = (percentage / 5.0) as u32;
-        println!(
-            "value {} min {} max {} range {} percentage {} bar_count {}",
-            value, min_value, max_value, range, percentage, bar_count
-        );
+        // println!(
+        //     "value {} min {} max {} range {} percentage {} bar_count {}",
+        //     value, min_value, max_value, range, percentage, bar_count
+        // );
 
         let bars_to_remove = 20 - bar_count;
 
