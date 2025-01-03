@@ -12,7 +12,7 @@ fn main() {
         generate_random_data: true,
     };
 
-    let mut list: Vec<u32> = Vec::new();
+    let mut list: Vec<f64> = Vec::new();
 
     if stdin().is_terminal() {
         let mut random_list_length: u32 = rand::random();
@@ -22,9 +22,9 @@ fn main() {
         random_list_min %= 8; // 0-7
 
         for _i in 0..random_list_length {
-            let mut rand: u32 = rand::random();
-            rand %= 20;
-            rand += random_list_min;
+            let mut rand: f64 = rand::random();
+            rand %= 20 as f64;
+            rand += random_list_min as f64;
 
             list.push(rand);
         }
@@ -36,7 +36,7 @@ fn main() {
 
         handle.lines().for_each(|line| match line {
             Ok(line) => {
-                let number = line.parse();
+                let number = line.parse::<f64>();
                 match number {
                     Ok(number) => {
                         list.push(number);

@@ -13,7 +13,7 @@ pub struct SparklineConfig {
     pub generate_random_data: bool,
 }
 
-pub fn sparkline(values: Vec<u32>, config: SparklineConfig) -> String {
+pub fn sparkline(values: Vec<f64>, config: SparklineConfig) -> String {
     if values.len() == 0 {
         panic!("no values");
     }
@@ -34,8 +34,9 @@ pub fn sparkline(values: Vec<u32>, config: SparklineConfig) -> String {
     }
     let value_count = useful_values.len();
 
-    let max_value = *(useful_values.iter().max().unwrap());
-    let min_value = *(useful_values.iter().min().unwrap());
+    let max_value = *(useful_values.iter().max_by(|a, b| a.total_cmp(b)).unwrap());
+    // it sucks that we can't just do useful_values.iter().min().unwrap() like we can on ints
+    let min_value = *(useful_values.iter().min_by(|a, b| a.total_cmp(b)).unwrap());
 
     if !config.suppress_text {
         println!(
@@ -77,18 +78,18 @@ pub fn sparkline(values: Vec<u32>, config: SparklineConfig) -> String {
 
     // let mut sparkline = String::new();
 
-    let range = (max_value - min_value) as f32;
+    let range = (max_value - min_value) as f64;
 
-    let percentage_divisor = 100.0 / SPARKLINE_HEIGHT as f32;
+    let percentage_divisor = 100.0 / SPARKLINE_HEIGHT as f64;
 
     for i in 0..value_count {
         let value = values[i];
-        let mut percentage = ((value as f32 - min_value as f32) / range) * 100.0;
+        let mut percentage = ((value as f64 - min_value as f64) / range) * 100.0;
         // to account for the case where the value is the same as the max
         if percentage.is_infinite() || percentage.is_nan() {
             percentage = 100.0;
         }
-        let bar_count = (percentage / percentage_divisor) as u32;
+        let bar_count: u32 = (percentage / percentage_divisor).round() as u32;
         // println!(
         //     "value {} min {} max {} range {} percentage {} bar_count {}",
         //     value, min_value, max_value, range, percentage, bar_count
