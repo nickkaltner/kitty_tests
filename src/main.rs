@@ -2,15 +2,13 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use core::str;
 use log::warn;
-use nix::libc::{ioctl, STDOUT_FILENO, TIOCGWINSZ};
-use palette::cast::ComponentsInto;
-use palette::{IntoColor, Srgba, WithAlpha};
+use nix::libc::{ioctl, STDOUT_FILENO};
+use palette::{Srgba, WithAlpha};
+use rand::*;
 use std::ffi::c_ushort;
-use std::fmt::format;
 use std::io;
 use std::io::Read;
 use std::os::fd::AsRawFd;
-use std::thread::JoinHandle;
 use termios::*;
 
 fn main() {
@@ -18,23 +16,42 @@ fn main() {
 
     //println!("{}", text_with_underline("Hello, world!"));
 
-    println!(
-        "{}",
-        text_with_red_underline("Is this a spelling mistake?!")
-    );
+    // println!(
+    //     "{}",
+    //     text_with_red_underline("Is this a spelling mistake?!")
+    // );
 
     //get_screen_size();
 
-    println!("{}", encode_graphics(20, 25));
+    // println!("{}", encode_graphics(20, 25));
 
-    println!("{:?}", get_window_size());
+    // println!("terminal dimensions: {:?}", get_window_size());
+
+    let mut rand: u32 = rand::random();
+    rand %= 40 + 20;
+
+    let mut list: Vec<u32> = Vec::new();
+
+    for i in 0..rand {
+        let mut rand: u32 = rand::random();
+        rand %= 20;
+
+        list.push(rand);
+    }
 
     sparkline(vec![
-        0, 2, 3, 4, 5, 6, 27, 28, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+        10, 10, 10, 10, 10, 10, 10,
     ]);
+
+    sparkline(list);
+
+    // sparkline(vec![
+    //     0, 2, 3, 4, 5, 6, 27, 28, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    // ]);
 }
 
-fn text_with_underline(string: &str) -> String {
+fn _text_with_underline(string: &str) -> String {
     let mut result = String::new();
 
     let out = "\u{1b}[4m";
@@ -50,7 +67,7 @@ fn text_with_red_underline(string: &str) -> String {
     format!("\u{1b}[4:3m\u{1b}[58;5;196m{}\u{1b}[0m\u{1b}[59m", string)
 }
 
-fn get_screen_size() -> (u16, u16) {
+fn _get_screen_size() -> (u16, u16) {
     // let mut size = (0, 0);
     // let mut stdout = std::io::stdout();
 
@@ -90,7 +107,6 @@ fn get_screen_size() -> (u16, u16) {
     new_termios.c_lflag &= !(ICANON | ECHO); // no echo and canonical mode
     tcsetattr(stdin, TCSANOW, &mut new_termios).unwrap();
     cfmakeraw(&mut new_termios);
-    let stdout = io::stdout();
     let mut reader = io::stdin().lock();
     let mut buffer = [0; 1]; // read exactly one byte
     print!("Hit a key! ");
@@ -105,11 +121,9 @@ fn get_screen_size() -> (u16, u16) {
 }
 
 fn white_line(length: u16) -> String {
-    let mut result = String::new();
-
     let four_byte_length: usize = length as usize * 4;
     // format r, g, b, a
-    let whitergba: [u8; 4] = [221, 160, 221, 255];
+    // let whitergba: [u8; 4] = [221, 160, 221, 255];
     let stripergba: [u8; 16] = [
         221, 160, 221, 255, 0, 20, 0, 255, 0, 20, 0, 255, 221, 160, 221, 255,
     ];
@@ -212,6 +226,10 @@ fn sparkline(values: Vec<u32>) -> String {
     let value_count = useful_values.len();
     let max_value = *useful_values.iter().max().unwrap();
     let min_value = *useful_values.iter().min().unwrap();
+    println!(
+        "min {} max {} value_count {}",
+        min_value, max_value, value_count
+    );
 
     // get colours
 
@@ -237,16 +255,34 @@ fn sparkline(values: Vec<u32>) -> String {
         let colour: Srgba<u8> = taken_colors[i as usize].into_encoding();
         // data[i * value_count] = 0xFF000000;
         for j in 0..value_count {
-            data[i * 20 + j as usize] = colour.into();
+            let rar = u32::from_le_bytes(colour.into());
+            let position = i * 20 + j as usize;
+            //println!("position {}, data {}", position, data.len());
+            if position >= data.len() {
+                //println!("position {} is out of bounds", position);
+            } else {
+                data[position] = rar;
+            }
         }
     }
 
     // let mut sparkline = String::new();
 
+    let range = (max_value - min_value) as f32;
+
     for i in 0..value_count {
         let value = values[i];
-        let percentage = (value as f32 / max_value as f32) * 100.0;
+        let mut percentage = ((value as f32 - min_value as f32) / range) * 100.0;
+        // to account for the case where the value is the same as the max
+        if percentage.is_infinite() {
+            percentage = 100.0;
+        }
         let bar_count = (percentage / 5.0) as u32;
+        println!(
+            "value {} min {} max {} range {} percentage {} bar_count {}",
+            value, min_value, max_value, range, percentage, bar_count
+        );
+
         let bars_to_remove = 20 - bar_count;
 
         // println!(
@@ -264,7 +300,7 @@ fn sparkline(values: Vec<u32>) -> String {
         // }
     }
 
-    println!("full_array {:?}", data);
+    // println!("full_array {:?}", data);
 
     let (_x, data2, _z) = unsafe { data.align_to::<u8>() };
 
