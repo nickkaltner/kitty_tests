@@ -4,7 +4,6 @@ use core::str;
 use log::warn;
 use nix::libc::{ioctl, STDOUT_FILENO};
 use palette::{Srgba, WithAlpha};
-use rand::*;
 use std::ffi::c_ushort;
 use std::io;
 use std::io::Read;
@@ -35,7 +34,7 @@ fn main() {
 
     let mut list: Vec<u32> = Vec::new();
 
-    for i in 0..random_list_length {
+    for _i in 0..random_list_length {
         let mut rand: u32 = rand::random();
         rand %= 20;
         rand += random_list_min;
@@ -43,13 +42,23 @@ fn main() {
         list.push(rand);
     }
 
-    // test of flat sparkline
-    sparkline(vec![
-        10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-        10, 10, 10, 10, 10, 10, 10,
-    ]);
+    let config = SparklineConfig {
+        suppress_text: true,
+        generate_random_data: true,
+    };
 
-    sparkline(list);
+    // test of flat sparkline
+    // sparkline(vec![
+    //     10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+    //     10, 10, 10, 10, 10, 10, 10,
+    // ]);
+
+    sparkline(list, config);
+}
+
+pub struct SparklineConfig {
+    pub suppress_text: bool,
+    pub generate_random_data: bool,
 }
 
 fn _text_with_underline(string: &str) -> String {
@@ -64,7 +73,7 @@ fn _text_with_underline(string: &str) -> String {
     result
 }
 
-fn text_with_red_underline(string: &str) -> String {
+fn _text_with_red_underline(string: &str) -> String {
     format!("\u{1b}[4:3m\u{1b}[58;5;196m{}\u{1b}[0m\u{1b}[59m", string)
 }
 
@@ -121,7 +130,7 @@ fn _get_screen_size() -> (u16, u16) {
     (1, 1)
 }
 
-fn white_line(length: u16) -> String {
+fn _white_line(length: u16) -> String {
     let four_byte_length: usize = length as usize * 4;
     // format r, g, b, a
     // let whitergba: [u8; 4] = [221, 160, 221, 255];
@@ -152,8 +161,8 @@ fn white_line(length: u16) -> String {
     str
 }
 
-fn encode_graphics(width: u16, height: u16) -> String {
-    let data = white_line(width * height);
+fn _encode_graphics(width: u16, height: u16) -> String {
+    let data = _white_line(width * height);
 
     // https://sw.kovidgoyal.net/kitty/graphics-protocol/#a-minimal-example
 
@@ -208,7 +217,10 @@ fn get_window_size() -> (u16, u16) {
     (winsize.ws_col, winsize.ws_row)
 }
 
-fn sparkline(values: Vec<u32>) -> String {
+fn sparkline(values: Vec<u32>, config: SparklineConfig) -> String {
+    if values.len() == 0 {
+        panic!("no values");
+    }
     let mut useful_values = values.clone();
 
     // get column count from terminal size
@@ -225,12 +237,16 @@ fn sparkline(values: Vec<u32>) -> String {
         useful_values = useful_values.split_off(terminal_column_count as usize);
     }
     let value_count = useful_values.len();
-    let max_value = *useful_values.iter().max().unwrap();
-    let min_value = *useful_values.iter().min().unwrap();
-    println!(
-        "min {} max {} value_count {}",
-        min_value, max_value, value_count
-    );
+
+    let max_value = *(useful_values.iter().max().unwrap());
+    let min_value = *(useful_values.iter().min().unwrap());
+
+    if !config.suppress_text {
+        println!(
+            "min {} max {} value_count {}",
+            min_value, max_value, value_count
+        );
+    }
 
     // get colours
 
@@ -243,7 +259,7 @@ fn sparkline(values: Vec<u32>) -> String {
         LinSrgb::new(0.95, 0.90, 0.30).with_alpha(1.0),
     ]);
 
-    let taken_colors: Vec<_> = gradient.take(20).collect();
+    let taken_colors: Vec<_> = gradient.take(20).rev().collect();
 
     //let mut zz: Srgba<u8> = taken_colors[1].into_encoding();
 
@@ -251,7 +267,7 @@ fn sparkline(values: Vec<u32>) -> String {
 
     let image_size = 20 * value_count;
     let mut data: Vec<u32> = Vec::with_capacity(image_size);
-    data.resize(image_size, 0xFF0000FF); // alpha, blue, green, red
+    data.resize(image_size, 0xFF0000FF); // alpha, blue, green, red - unsure why this is reversed
 
     for row in 0..20 {
         let colour: Srgba<u8> = taken_colors[row as usize].into_encoding();
@@ -297,17 +313,13 @@ fn sparkline(values: Vec<u32>) -> String {
         // );
 
         for j in 0..bars_to_remove {
-            // println!("removing from point {}", i * value_count + j as usize);
             data[j as usize * value_count + i] = 0xFF000000;
         }
-
-        // for _ in 0..bar_count {
-        //     sparkline.push('█');
-        // }
     }
 
     // println!("full_array {:?}", data);
 
+    // i wonder if this screws up the order of the data - it seems to be coming out reversed
     let (_x, data2, _z) = unsafe { data.align_to::<u8>() };
 
     let output = BASE64_STANDARD.encode(data2);
@@ -322,8 +334,11 @@ fn sparkline(values: Vec<u32>) -> String {
     //     value_count, 20, output
     // );
 
-    println!("sparkline: {}", ansi_output);
-    println!("sparkline: 123456789012345678901234567890");
-
-    "eek".to_string()
+    if config.suppress_text {
+        println!("{}", ansi_output);
+    } else {
+        println!("sparkline: {}", ansi_output);
+        println!("sparkline: 123456789012345678901234567890123456789012345678901234567890");
+    }
+    ansi_output
 }
