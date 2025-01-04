@@ -1,6 +1,8 @@
 use std::ffi::c_ushort;
+use std::time::Duration;
 
 use nix::libc::{ioctl, STDOUT_FILENO};
+use timeout_readwrite::TimeoutReader;
 
 use std::io::{stdin, stdout, Read};
 use std::io::{IsTerminal, Write};
@@ -44,11 +46,14 @@ pub fn get_window_size() -> (u16, u16) {
 /* checks if the terminal supports graphics
    https://sw.kovidgoyal.net/kitty/graphics-protocol/#a-minimal-example
 
-   the only problem is that it won't timeout if the terminal doesn't support graphics.  We need to fix that :)
+   we timeout after 10ms, which is a bit of a long time, but it's a good long time.
 */
 pub fn get_kitty_support() -> bool {
     run_code_in_raw_mode(|| {
-        let mut reader = stdin().lock();
+        let reader = stdin();
+
+        let mut reader_with_timeout =
+            TimeoutReader::new(reader.lock(), Duration::new(0, 10_000_000)); // 10ms
         let return_val = "\u{1b}_Gi=4294967295;OK\u{1b}\\";
 
         let mut buffer = [0; 20]; // read exactly 20 bytes - the string above
@@ -57,12 +62,21 @@ pub fn get_kitty_support() -> bool {
 
         stdout().flush().unwrap(); // this is critical to make the terminal get the above
 
-        reader.read_exact(&mut buffer).unwrap();
+        let res = reader_with_timeout.read_exact(&mut buffer);
+
+        match res {
+            Ok(_) => {
+                //println!(" {:?} {}", buffer, buffer.escape_ascii());
+                if buffer == return_val.as_bytes() {
+                    return true;
+                }
+            }
+            Err(_e) => {
+                // we know the timeout occured, so ignore it.
+            }
+        }
         //println!(" {:?} {}", buffer, buffer.escape_ascii());
 
-        if buffer == return_val.as_bytes() {
-            return true;
-        }
         false
     })
 }

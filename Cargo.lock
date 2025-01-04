@@ -93,6 +93,7 @@ dependencies = [
  "palette",
  "rand",
  "termios",
+ "timeout-readwrite",
 ]
 
 [[package]]
@@ -292,6 +293,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "411c5bf740737c7918b8b1fe232dca4dc9f8e754b8ad5e20966814001ed0ac6b"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "timeout-readwrite"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f99014ef5f7ad8fb986e0885b612ac6bd74a87c8df9816c27de5dcc49029646"
+dependencies = [
+ "nix",
 ]
 
 [[package]]
