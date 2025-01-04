@@ -16,6 +16,15 @@ fn main() {
 
     if stdin().is_terminal() {
         eprintln!("detected terminal, will generate random numbers for demo purposes");
+
+        let (terminal_width, terminal_height) =
+            terminal_details::get_terminal_dimensions_in_pixels().unwrap();
+
+        eprintln!(
+            "terminal dimensions: {}x{}",
+            terminal_width, terminal_height
+        );
+
         let mut random_list_length: u32 = rand::random();
         random_list_length %= 40 + 20;
 
