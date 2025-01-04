@@ -14,6 +14,11 @@ fn main() {
 
     let mut list: Vec<f64> = Vec::new();
 
+    if !terminal_details::get_kitty_support() {
+        eprintln!("graphics support not detected, will not draw sparkline.  Exiting.");
+        std::process::exit(1);
+    }
+
     if stdin().is_terminal() {
         eprintln!("detected terminal, will generate random numbers for demo purposes");
 
@@ -26,7 +31,8 @@ fn main() {
         );
 
         let mut random_list_length: u32 = rand::random();
-        random_list_length %= 40 + 20;
+        random_list_length %= 40;
+        random_list_length += 1; // minimum list of 1
 
         let mut random_list_min: u32 = rand::random();
         random_list_min %= 8; // 0-7

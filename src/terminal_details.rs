@@ -41,6 +41,32 @@ pub fn get_window_size() -> (u16, u16) {
     (winsize.ws_col, winsize.ws_row)
 }
 
+/* checks if the terminal supports graphics
+   https://sw.kovidgoyal.net/kitty/graphics-protocol/#a-minimal-example
+
+   the only problem is that it won't timeout if the terminal doesn't support graphics.  We need to fix that :)
+*/
+pub fn get_kitty_support() -> bool {
+    run_code_in_raw_mode(|| {
+        let mut reader = stdin().lock();
+        let return_val = "\u{1b}_Gi=4294967295;OK\u{1b}\\";
+
+        let mut buffer = [0; 20]; // read exactly 20 bytes - the string above
+
+        print!("\u{1b}_Gi=4294967295,s=1,v=1,a=q,t=d,f=24;AAAA\u{1b}\\");
+
+        stdout().flush().unwrap(); // this is critical to make the terminal get the above
+
+        reader.read_exact(&mut buffer).unwrap();
+        //println!(" {:?} {}", buffer, buffer.escape_ascii());
+
+        if buffer == return_val.as_bytes() {
+            return true;
+        }
+        false
+    })
+}
+
 /**
  * uses an ANSI escape sequence to get the terminal dimensions in pixels, supported by most modern terminals
  */
