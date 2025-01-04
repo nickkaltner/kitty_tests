@@ -15,6 +15,7 @@ fn main() {
     let mut list: Vec<f64> = Vec::new();
 
     if stdin().is_terminal() {
+        eprintln!("detected terminal, will generate random numbers for demo purposes");
         let mut random_list_length: u32 = rand::random();
         random_list_length %= 40 + 20;
 
@@ -29,7 +30,7 @@ fn main() {
             list.push(rand);
         }
     } else {
-        eprintln!("detected pipe, will read from stdin");
+        eprintln!("detected pipe, will read newline separated numbers from stdin");
 
         let stdin = io::stdin();
         let handle = stdin.lock();

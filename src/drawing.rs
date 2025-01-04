@@ -78,13 +78,13 @@ pub fn sparkline(values: Vec<f64>, config: SparklineConfig) -> String {
 
     // let mut sparkline = String::new();
 
-    let range = (max_value - min_value) as f64;
+    let range = max_value - min_value;
 
     let percentage_divisor = 100.0 / SPARKLINE_HEIGHT as f64;
 
     for i in 0..value_count {
         let value = values[i];
-        let mut percentage = ((value as f64 - min_value as f64) / range) * 100.0;
+        let mut percentage = ((value - min_value) / range) * 100.0;
         // to account for the case where the value is the same as the max
         if percentage.is_infinite() || percentage.is_nan() {
             percentage = 100.0;
