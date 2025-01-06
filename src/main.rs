@@ -14,6 +14,7 @@ fn main() {
 
     let mut list: Vec<f64> = Vec::new();
 
+    // TODO: this has problems with pipes
     if !terminal_details::get_kitty_support() {
         eprintln!("graphics support not detected, will not draw sparkline.  Exiting.");
         std::process::exit(1);

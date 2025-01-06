@@ -1,11 +1,10 @@
 use std::ffi::c_ushort;
-use std::time::Duration;
+use std::fs::OpenOptions;
 
 use nix::libc::{ioctl, STDOUT_FILENO};
-use timeout_readwrite::TimeoutReader;
 
-use std::io::{stdin, stdout, Read};
-use std::io::{IsTerminal, Write};
+use std::io::Read;
+use std::io::Write;
 use std::os::fd::AsRawFd;
 use termios::*;
 
@@ -50,52 +49,106 @@ pub fn get_window_size() -> (u16, u16) {
 */
 pub fn get_kitty_support() -> bool {
     run_code_in_raw_mode(|| {
-        let reader = stdin();
+        let mut tty_device = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .append(true)
+            .open("/dev/tty")
+            .unwrap();
 
-        let mut reader_with_timeout =
-            TimeoutReader::new(reader.lock(), Duration::new(0, 10_000_000)); // 10ms
-        let return_val = "\u{1b}_Gi=4294967295;OK\u{1b}\\";
+        let return_val = "Gi=4294967295;OK\u{1b}\\";
 
-        let mut buffer = [0; 20]; // read exactly 20 bytes - the string above
+        let _res = write!(
+            tty_device,
+            "\u{1b}_Gi=4294967295,s=1,v=1,a=q,t=d,f=24;AAAA\u{1b}\\\u{1b}[c"
+        );
 
-        print!("\u{1b}_Gi=4294967295,s=1,v=1,a=q,t=d,f=24;AAAA\u{1b}\\");
-
-        stdout().flush().unwrap(); // this is critical to make the terminal get the above
-
-        let res = reader_with_timeout.read_exact(&mut buffer);
-
-        match res {
-            Ok(_) => {
-                //println!(" {:?} {}", buffer, buffer.escape_ascii());
-                if buffer == return_val.as_bytes() {
-                    return true;
-                }
-            }
-            Err(_e) => {
-                // we know the timeout occured, so ignore it.
-            }
+        let out = read_ansi_stream(&mut tty_device);
+        // println!("deadbeef {} {:?}", out, out);
+        // println!("deadbeef {} {:?}", return_val, return_val);
+        if out == return_val {
+            let _out = read_ansi_stream(&mut tty_device);
+            // println!("deadbeef {} {:?}", out, out);
+            // println!("deadbeef {} {:?}", return_val, return_val);
+            return true;
         }
-        //println!(" {:?} {}", buffer, buffer.escape_ascii());
 
         false
     })
+}
+
+pub fn read_ansi_stream(reader: &mut dyn Read) -> String {
+    let a = read_one_character(reader).unwrap();
+    loop {
+        if a == '\u{1b}' {
+            let b = read_one_character(reader).unwrap();
+
+            if b == '[' {
+                return read_until(reader, "c");
+            } else if b == '_' {
+                return read_until(reader, "\\");
+            } else {
+                // something went wrong
+                println!("unknown ansi sequence \\e{}", b);
+            }
+        } else {
+            // something went wrong, non escape character, do nothing.
+            println!("got {:?}", a);
+        }
+    }
+}
+
+pub fn read_one_character(reader: &mut dyn Read) -> Result<char, String> {
+    let mut buffer = [0; 1]; // read exactly one byte
+
+    let res = reader.read_exact(&mut buffer);
+
+    match res {
+        Ok(_) => {
+            let char = buffer[0] as char;
+            Ok(char)
+        }
+        Err(e) => Err(format!("error reading character: {:?}", e)),
+    }
+}
+
+pub fn read_until(reader: &mut dyn Read, escape_terminator: &str) -> String {
+    let mut buffer = String::new();
+    let mut _complete = false;
+
+    for _c in 0..30 {
+        let char = read_one_character(reader).unwrap();
+        buffer.push(char);
+        if buffer.contains(escape_terminator) {
+            _complete = true;
+            break;
+        }
+    }
+
+    buffer
 }
 
 /**
  * uses an ANSI escape sequence to get the terminal dimensions in pixels, supported by most modern terminals
  */
 pub fn get_terminal_dimensions_in_pixels() -> Result<(u16, u16), String> {
-    if !stdout().is_terminal() {
-        return Err("This function needs a terminal".to_string());
-    }
+    // if !stdout().is_terminal() {
+    //     return Err("This function needs a terminal".to_string());
+    // }
 
     run_code_in_raw_mode(|| {
-        let mut reader = stdin().lock();
-        let mut buffer = [0; 4]; // read exactly one byte
-        print!("\u{1b}[14t");
-        stdout().flush().unwrap(); // this is critical to make the terminal get the above
+        let mut tty_device = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .append(true)
+            .open("/dev/tty")
+            .unwrap();
 
-        reader.read_exact(&mut buffer).unwrap();
+        let mut buffer = [0; 4]; // read exactly one byte
+        let _result = write!(tty_device, "\u{1b}[14t");
+        // stdout().flush().unwrap(); // this is critical to make the terminal get the above
+
+        tty_device.read_exact(&mut buffer).unwrap();
         //println!("You have hit: {:?} {}", buffer, buffer.escape_ascii());
 
         let mut dimensions = (0, 0);
@@ -110,7 +163,7 @@ pub fn get_terminal_dimensions_in_pixels() -> Result<(u16, u16), String> {
             let mut outstr = String::new();
             // 20 is a reasonable limit if we can't get our answer by then, normally it takes me 10 characters
             for _ in 0..20 {
-                reader.read_exact(&mut charbuffer).unwrap();
+                tty_device.read_exact(&mut charbuffer).unwrap();
                 let char = charbuffer[0];
 
                 if char == b't' {
@@ -142,16 +195,24 @@ pub fn get_terminal_dimensions_in_pixels() -> Result<(u16, u16), String> {
  * useful for when you want to ask the terminal something
  * */
 pub fn run_code_in_raw_mode<T>(func: fn() -> T) -> T {
-    let stdin_fd = stdin().as_raw_fd();
-    let mut termios = Termios::from_fd(stdin_fd).unwrap();
+    let tty_device = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .append(true)
+        .open("/dev/tty")
+        .unwrap();
+
+    let tty_device_fd = tty_device.as_raw_fd();
+
+    let mut termios = Termios::from_fd(tty_device_fd).unwrap();
     let old_termios = termios.clone();
 
     termios.c_lflag &= !(ICANON | ECHO); // no echo and canonical mode
-    tcsetattr(stdin_fd, TCSANOW, &mut termios).unwrap();
+    tcsetattr(tty_device_fd, TCSANOW, &mut termios).unwrap();
     cfmakeraw(&mut termios);
 
     let return_value = func();
 
-    tcsetattr(stdin_fd, TCSANOW, &old_termios).unwrap(); // reset the stdin to the original termios data
+    tcsetattr(tty_device_fd, TCSANOW, &old_termios).unwrap(); // reset the stdin to the original termios data
     return_value
 }
